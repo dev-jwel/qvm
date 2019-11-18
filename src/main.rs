@@ -1,3 +1,13 @@
+// TODOS
+// 1. change address: usize parameter in measure function to addresses : Vec<usize>
+// 2. change parameter to Vec<AddressedBit> in set_superposition too
+// 3. implement pass_gate function
+// 4. implement common gates
+// 5. write tests for each functions or structs with its implementation
+// 6. split source code file
+// 7. make package
+
+
 use std::option::Option;
 use num::complex::Complex64;
 use rand::random;
@@ -24,7 +34,7 @@ fn is_valid_addresses(bits: usize, addresses: & Vec<usize>) -> bool {
 }
 
 fn abs(c: Complex64) -> f64 {
-	c.re* c.re + c.im + c.im
+	c.re * c.re + c.im * c.im
 }
 
 #[derive(Clone)]
@@ -94,38 +104,30 @@ impl Gate {
 	}
 
 
-	fn hadamard(input: Vec<Complex64>) -> Vec<Complex64> {
-		assert_eq!(input.len(), 1 << Gate::H.parameter_length());
+	fn hadamard(mut v: Vec<Complex64>) -> Vec<Complex64> {
+		assert_eq!(v.len(), 1 << Gate::H.parameter_length());
 		let square_root = 2.0f64.sqrt();
-		let mut output = vec![Complex64 {re:0.0, im:0.0};2];
-		output[0] = square_root * (input[0] + input[1]);
-		output[1] = square_root * (input[0] - input[1]);
-
-		output
+		let out0 = square_root * (v[0] + v[1]);
+		let out1 = square_root * (v[0] - v[1]);
+		v[0] = out0;
+		v[1] = out1;
+		v
 	}
 
-	fn swap(input: Vec<Complex64>) -> Vec<Complex64> {
-		assert_eq!(input.len(), 1 << Gate::SWAP.parameter_length());
-		let mut output = vec![Complex64 {re:0.0, im:0.0};4];
-		output[0] = input[0];
-		output[1] = input[2];
-		output[2] = input[1];
-		output[3] = input[3];
-		output
+	fn swap(mut v: Vec<Complex64>) -> Vec<Complex64> {
+		assert_eq!(v.len(), 1 << Gate::SWAP.parameter_length());
+		let tmp = v[1];
+		v[1] = v[2];
+		v[2] = tmp;
+		v
 	}
 
-	fn cswap(input: Vec<Complex64>) -> Vec<Complex64> {
-		assert_eq!(input.len(), 1 << Gate::CSWAP.parameter_length());
-		let mut output = vec![Complex64 {re:0.0, im:0.0};4];
-		output[0] = input[0];
-		output[1] = input[1];
-		output[2] = input[2];
-		output[3] = input[3];
-		output[4] = input[4];
-		output[5] = input[6];
-		output[6] = input[5];
-		output[7] = input[7];
-		output
+	fn cswap(mut v: Vec<Complex64>) -> Vec<Complex64> {
+		assert_eq!(v.len(), 1 << Gate::CSWAP.parameter_length());
+		let tmp = v[5];
+		v[5] = v[6];
+		v[6] = tmp;
+		v
 	}
 }
 
@@ -141,15 +143,16 @@ struct QubitCounter {
 	len_counter: usize
 }
 
+// this iteration used to apply gate to all basis related with specific address
 impl QubitCounter {
 	fn new(bits: usize, mut pinned_bits: Vec<AddressedBit>) -> QubitCounter {
 		let mut addresses : Vec<usize> = Vec::new();
 		for i in 0 .. pinned_bits.len() {
+			assert!(pinned_bits[i].bit == 0 || pinned_bits[i].bit == 1);
 			addresses.push(pinned_bits[i].address);
 		}
 		assert!(is_valid_addresses(bits, &addresses));
 		pinned_bits.sort_by_key(|k| k.address);
-		pinned_bits.reverse();
 		QubitCounter {bits: bits, counter: 0, len_counter: bits-pinned_bits.len(), pinned_bits: pinned_bits}
 	}
 }
@@ -158,22 +161,24 @@ impl Iterator for QubitCounter {
 	type Item = usize;
 
 	fn next(&mut self) -> Option<Self::Item> {
-		if self.counter >= 1 << (self.len_counter) {
+		if self.counter >= (1 << self.len_counter) {
 			return None;
 		}
 
 		let prev_counter = self.counter;
 		self.counter += 1;
 
+		let mut counter_index = 0;
 		let mut pinned_index = 0;
 		let mut basis : usize = 0;
 
-		for i in (0 .. self.len_counter).rev() {
+		for i in 0 .. self.bits {
 			if pinned_index < self.pinned_bits.len() && self.pinned_bits[pinned_index].address == i {
 				basis += (self.pinned_bits[pinned_index].bit as usize) << i;
 				pinned_index += 1;
 			} else {
-				basis += prev_counter & (1 << i);
+				basis += (prev_counter & (1 << counter_index)) << (i - counter_index);
+				counter_index += 1;
 			}
 		}
 
@@ -181,11 +186,28 @@ impl Iterator for QubitCounter {
 	}
 }
 
+#[test]
+fn qubit_counter_tester() {
+	let mut addresses : Vec<AddressedBit> = Vec::new();
+	addresses.push(AddressedBit{address: 1, bit: 0});
+	addresses.push(AddressedBit{address: 2, bit: 1});
+
+	let mut generated : Vec<usize> = Vec::new();
+	let qc = QubitCounter::new(4, addresses);
+	for addr in qc {
+		generated.push(addr);
+	}
+
+	assert_eq!(generated, vec![4, 5, 12, 13]);
+}
+
 struct QVM {
 	// size of qubits
 	bits: usize,
+
 	// states of each qubits
 	states: Vec<State>,
+
 	// coefficient of each states and its absolute value is its probability
 	// size of state is 2^bits
 	// sum of all probability of basis must be 1
@@ -266,7 +288,7 @@ impl QVM {
 		} else if ! self.states[address].is_superposition() {
 			None
 		} else {
-			// pick basis rabdomly
+			// pick basis randomly
 
 			let mut rand : f64 = random();
 			let mut raw_measurement : usize = 0;
@@ -307,7 +329,7 @@ impl QVM {
 
 			let pinned = vec![AddressedBit{address:address, bit:measured}];
 			let counter = QubitCounter::new(self.bits, pinned);
-			let weight = 1.0 / (1.0 - removed_probability);
+			let weight = 1.0 / (1.0 - removed_probability).sqrt();
 
 			for c in counter {
 				self.basises[c] *= weight;
@@ -327,10 +349,6 @@ impl QVM {
 	}
 }
 
-// basic gate functions
-
-
-
 /**
  * To calculate all qubit, we need (2^n)x(2^n) size huge matrix and computation time is
  * O(4^n) mathmetically. However, we need only use fucntion that performs linear transformation
@@ -338,12 +356,11 @@ impl QVM {
  */
 impl QVM {
 	fn pass_gate(&self, gate: Gate, addresses: Vec<usize>) -> Option<bool> {
-		// check whether all address is valid
-		// check addresses has same addresses
-		// check size of matrix
-		// ? check whether matrix is unitary
+		assert!(is_valid_addresses(self.bits, &addresses));
+		assert!(gate.parameter_length() == addresses.len());
 
-		// apply matrix for all qubits which are in superposition
+
+		// apply gate for all qubits which are in superposition
 
 		None
 	}
