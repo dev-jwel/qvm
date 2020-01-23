@@ -161,27 +161,71 @@ impl QVM {
  * for better performance. Computation time of this implement is O(2^n).
  */
 impl QVM {
-	fn pass_gate(&self, gate: Gate, addresses: Vec<usize>) -> Option<bool> {
+	pub fn pass_gate(&mut self, gate: Gate, addresses: Vec<usize>) -> Option<bool> {
 		assert!(is_valid_addresses(self.bits, &addresses));
-		assert!(gate.parameter_length() == addresses.len());
+		assert_eq!(gate.parameter_length(), addresses.len());
 
-		let mut subregister = vec![Complex64{re:0.0, im:0.0}; 1 << addresses.len()];
+		for addr in &addresses {
+			assert!(self.is_superposition(*addr));
+		}
+
+		// generate address decoder
+
+		let mut addressed_bits : Vec<AddressedBit> = Vec::new();
+		for addr in &addresses {
+			addressed_bits.push(AddressedBit{address: *addr, bit: 0});
+		}
+
+		let decoder = AddressDecoder::new(self.bits, addressed_bits);
 
 		// apply gate for all qubits which are in superposition
 
-		//let decoder = AddressDecoder::new(self.bits, addresses.len());
+		for subaddress in decoder {
+			let input = self.read_subregister(subaddress, &addresses);
+			let gate_function = gate.to_function();
+			let output = gate_function(input);
+			self.write_subregister(subaddress, &addresses, output);
+		}
 
-		//for subaddress in decoder {
-
-		//}
-
-
-		None
+		Some(true)
 	}
 }
 
 impl QVM {
-	fn address_decoder(addresses: Vec<usize>, count: u128) -> u128 {
-		0
+	fn read_subregister(&self, subaddress: usize, pinned_addresses: &Vec<usize>) -> Vec<Complex64> {
+		let length = pinned_addresses.len();
+		let mut ret = vec![Complex64{re:0.0,im:0.0}; 1<<length];
+
+		for i in 0 .. 1 << length {
+			let mut index: usize = subaddress;
+			for j in 0 .. i {
+				if i & (1 << j) != 0 {
+					index += 1 << pinned_addresses[j];
+				}
+			}
+
+			ret[i] = self.register[index];
+		}
+
+		ret
+	}
+
+	fn write_subregister(&mut self, subaddress: usize, pinned_addresses: &Vec<usize>, input: Vec<Complex64>) -> Option<bool> {
+		assert_eq!(1 << pinned_addresses.len(), input.len());
+
+		let length = input.len();
+
+		for i in 0 .. 1 << length {
+			let mut index: usize = subaddress;
+			for j in 0 .. i {
+				if i & (1 << j) != 0 {
+					index += 1 << pinned_addresses[j];
+				}
+			}
+
+			self.register[index] = input[i];
+		}
+
+		Some(true)
 	}
 }
