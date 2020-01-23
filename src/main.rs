@@ -4,13 +4,12 @@
 // 3. implement pass_gate function
 // 4. implement common gates
 // 5. write tests for each functions or structs with its implementation
-// 6. split source code file
-// 7. make package
 
 use qvm::QVM;
 
 fn main() {
 	println!("generating new qvm...");
-	let qvm = QVM::new(25);
+	let mut qvm = QVM::new(25);
+	qvm.measure(0);
 	println!("hello qvm!!");
 }

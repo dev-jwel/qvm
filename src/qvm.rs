@@ -3,9 +3,9 @@ use num::complex::Complex64;
 use rand::random;
 
 use crate::gate::Gate;
-use crate::instruction::Instruction;
 use crate::state::State;
-use crate::qubit_counter::{QubitCounter, AddressedBit, is_valid_addresses};
+use crate::address_decoder::{AddressDecoder, AddressedBit, is_valid_addresses};
+
 
 fn abs(c: Complex64) -> f64 {
 	c.re * c.re + c.im * c.im
@@ -22,7 +22,7 @@ pub struct QVM {
 	// coefficient of each states and its absolute value is its probability
 	// size of state is 2^bits
 	// sum of all probability of basis must be 1
-	basises: Vec<Complex64>
+	register: Vec<Complex64>
 }
 
 // basic methods
@@ -34,10 +34,10 @@ impl QVM {
 		let mut qvm = QVM {
 			bits: n,
 			states: vec![default_state; n],
-			basises: vec![default_basis; 1 << n]
+			register: vec![default_basis; 1 << n]
 		};
 
-		qvm.basises[0] = Complex64 {re:1.0, im:0.0};
+		qvm.register[0] = Complex64 {re:1.0, im:0.0};
 
 		qvm
 	}
@@ -54,18 +54,13 @@ impl QVM {
 		}
 	}
 
-	// TODO
-	pub fn execute(&self, ins: Instruction, params: Vec<u8>) -> Option<Vec<u8>> {
-		match ins {
-			_ => None
-		}
-	}
 }
 
 // TODOS : management, excution functions
 
 // management
 impl QVM {
+	// TODO : expend to vector
 	pub fn set_superposition(&mut self, address: usize, value: u8) -> Option<bool> {
 		if (value != 0 && value != 1) || address >= self.bits {
 			None
@@ -76,15 +71,15 @@ impl QVM {
 		} else {
 			let mask = 1 << address;
 			let pinned = vec![AddressedBit{address:address, bit:value}];
-			let counter = QubitCounter::new(self.bits, pinned);
+			let counter = AddressDecoder::new(self.bits, pinned);
 
 			for c in counter {
 				let zero : Complex64 = Complex64 {re:0.0, im:0.0};
 
 				// probability of diffirent state of qubit must be zero
-				assert_eq!(self.basises[c], zero);
-				self.basises[c] = self.basises[c ^ mask];
-				self.basises[c ^ mask] = zero;
+				assert_eq!(self.register[c], zero);
+				self.register[c] = self.register[c ^ mask];
+				self.register[c ^ mask] = zero;
 			}
 
 			self.states[address] = State::SUPERPOSITION;
@@ -109,8 +104,8 @@ impl QVM {
 			}
 
 			for i in 0 ..  {
-				rand -= abs(self.basises[i]);
-				if rand < 0.0 {
+				rand -= abs(self.register[i]);
+				if rand <= 0.0 {
 					raw_measurement = i;
 					break;
 				}
@@ -127,23 +122,23 @@ impl QVM {
 			let mask = 1 << address;
 			let measured = if raw_measurement & mask == 0 {0} else {1};
 			let pinned = vec![AddressedBit{address:address, bit:measured}];
-			let counter = QubitCounter::new(self.bits, pinned);
+			let counter = AddressDecoder::new(self.bits, pinned);
 			let mut removed_probability : f64 = 0.0;
 
 			for c in counter {
 				let zero : Complex64 = Complex64 {re:0.0, im:0.0};
-				removed_probability += abs(self.basises[c ^ mask]);
-				self.basises[c ^ mask] = zero;
+				removed_probability += abs(self.register[c ^ mask]);
+				self.register[c ^ mask] = zero;
 			}
 
 			// multiply removed value to make sum of probability 1
 
 			let pinned = vec![AddressedBit{address:address, bit:measured}];
-			let counter = QubitCounter::new(self.bits, pinned);
+			let counter = AddressDecoder::new(self.bits, pinned);
 			let weight = 1.0 / (1.0 - removed_probability).sqrt();
 
 			for c in counter {
-				self.basises[c] *= weight;
+				self.register[c] *= weight;
 			}
 
 			// change statement
@@ -170,9 +165,23 @@ impl QVM {
 		assert!(is_valid_addresses(self.bits, &addresses));
 		assert!(gate.parameter_length() == addresses.len());
 
+		let mut subregister = vec![Complex64{re:0.0, im:0.0}; 1 << addresses.len()];
 
 		// apply gate for all qubits which are in superposition
 
+		//let decoder = AddressDecoder::new(self.bits, addresses.len());
+
+		//for subaddress in decoder {
+
+		//}
+
+
 		None
+	}
+}
+
+impl QVM {
+	fn address_decoder(addresses: Vec<usize>, count: u128) -> u128 {
+		0
 	}
 }
