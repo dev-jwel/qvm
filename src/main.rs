@@ -9,18 +9,24 @@ use qvm::QVM;
 use qvm::gate::Gate;
 
 fn main() {
+	let n = 3;
 	println!("generating new qvm...");
-	let mut qvm = QVM::new(8);
+	let mut qvm = QVM::new(n);
+	qvm.print_register();
 
 	println!("set superposition...");
-	qvm.set_superposition(0, 1);
-	for i in 1 .. 8 {
+	for i in 0 .. n {
 		qvm.set_superposition(i, 1);
 	}
+	qvm.print_register();
 
 	println!("pass hadamard...");
-	qvm.pass_gate(Gate::H, vec![0; 1]);
+	for i in 0 .. n {
+		qvm.pass_gate(Gate::H, vec![i]);
+	}
+	qvm.print_register();
 
+	println!("measure...");
 	qvm.measure(0);
-	println!("hello qvm!!");
+	qvm.print_register();
 }

@@ -27,8 +27,8 @@ impl Gate {
 fn hadamard(mut v: Vec<Complex64>) -> Vec<Complex64> {
 	assert_eq!(v.len(), 1 << Gate::H.parameter_length());
 	let square_root = 2.0f64.sqrt();
-	let out0 = square_root * (v[0] + v[1]);
-	let out1 = square_root * (v[0] - v[1]);
+	let out0 = (1.0 / square_root) * (v[0] + v[1]);
+	let out1 = (1.0 / square_root) * (v[0] - v[1]);
 	v[0] = out0;
 	v[1] = out1;
 	v

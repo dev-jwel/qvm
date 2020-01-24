@@ -67,6 +67,7 @@ impl QVM {
 		} else if self.states[address].is_superposition() {
 			Some(false)
 		} else if self.states[address] == value {
+			self.states[address] = State::SUPERPOSITION;
 			Some(true)
 		} else {
 			let mask = 1 << address;
@@ -94,7 +95,7 @@ impl QVM {
 		} else if ! self.states[address].is_superposition() {
 			None
 		} else {
-			// pick basis randomly
+			// pick register randomly
 
 			let mut rand : f64 = random();
 			let mut raw_measurement : usize = 0;
@@ -166,6 +167,7 @@ impl QVM {
 		assert_eq!(gate.parameter_length(), addresses.len());
 
 		for addr in &addresses {
+			//println!("check superposition in {} : {:?}", *addr, self.states[*addr]);
 			assert!(self.is_superposition(*addr));
 		}
 
@@ -198,7 +200,7 @@ impl QVM {
 
 		for i in 0 .. 1 << length {
 			let mut index: usize = subaddress;
-			for j in 0 .. i {
+			for j in 0 .. length {
 				if i & (1 << j) != 0 {
 					index += 1 << pinned_addresses[j];
 				}
@@ -213,11 +215,11 @@ impl QVM {
 	fn write_subregister(&mut self, subaddress: usize, pinned_addresses: &Vec<usize>, input: Vec<Complex64>) -> Option<bool> {
 		assert_eq!(1 << pinned_addresses.len(), input.len());
 
-		let length = input.len();
+		let length = pinned_addresses.len();
 
 		for i in 0 .. 1 << length {
 			let mut index: usize = subaddress;
-			for j in 0 .. i {
+			for j in 0 .. length {
 				if i & (1 << j) != 0 {
 					index += 1 << pinned_addresses[j];
 				}
@@ -227,5 +229,13 @@ impl QVM {
 		}
 
 		Some(true)
+	}
+}
+
+impl QVM {
+	pub fn print_register(&self) {
+		for i in 0 .. 1 << self.bits {
+			println!("{:#05b}> : {:?}", i, self.register[i]);
+		}
 	}
 }
